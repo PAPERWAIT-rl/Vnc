@@ -1,6 +1,6 @@
 name: Ubuntu noVNC Desktop
 
-on:
+on: 
   workflow_dispatch:
 
 jobs:
@@ -9,29 +9,44 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+    - name: Checkout Code
+      uses: actions/checkout@v4
 
-      - name: Install Desktop and noVNC Dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y xfce4 xfce4-goodies tightvncserver novnc websockify curl git
+    - name: Install Desktop and noVNC Dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y xfce4 xfce4-goodies tightvncserver novnc websockify curl git
 
-      - name: Start VNC Server
-        run: |
-          vncpasswd -f <<< "password123" > ~/.vnc/passwd
-          chmod 600 ~/.vnc/passwd
-          vncserver :1 -geometry 1280x800 -depth 24
+    - name: Start VNC Server
+      run: |
+        # Create the missing VNC directory first
+        mkdir -p ~/.vnc
+        
+        # Pass the password twice (password + confirmation) into vncpasswd
+        echo "password123" | vncpasswd -f 2>/dev/null || (echo "password123"; echo "password123") | vncpasswd
+        
+        chmod 600 ~/.vnc/passwd
+        vncserver :1 -geometry 1280x800 -depth 24
 
-      - name: Start noVNC Web Server
-        run: |
-          nohup websockify --web=/usr/share/novnc/ 6080 localhost:5901 > websockify.log 2>&1 &
-          sleep 3
+    - name: Start noVNC Web Server
+      run: |
+        nohup websockify --web=/usr/share/novnc/ 6080 localhost:5901 > websockify.log 2>&1 &
+        sleep 3
 
-      - name: Expose via Cloudflare Tunnel
-        run: |
-          curl -L https://github.com -o cloudflared
-          chmod +x cloudflared
-          ./cloudflared tunnel --url http://localhost:6080 --no-autoupdate &
-          sleep 10
-          grep -o 'https://[-0-9a-z]*\.trycloudflare.com' nohup.out || true
+    - name: Expose via Cloudflare Tunnel
+      run: |
+        # Download the correct cloudflared binary for Linux x86_64
+        curl -L https://github.com -o cloudflared
+        chmod +x cloudflared
+        
+        # Start tunnel and pipe output to nohup.out so grep can read it
+        nohup ./cloudflared tunnel --url http://localhost:6080 --no-autoupdate > nohup.out 2>&1 &
+        
+        # Wait for the tunnel to establish and generate a URL
+        sleep 10
+        
+        # Output the URL explicitly to the workflow logs
+        echo "============================================="
+        echo " YOUR NOVNC URL:"
+        grep -o 'https://[-0-9a-z]*\.trycloudflare.com' nohup.out || echo "Tunnel URL not found. Check nohup.out"
+        echo "============================================="
