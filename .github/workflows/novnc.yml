@@ -1,0 +1,37 @@
+name: Ubuntu noVNC Desktop
+
+on:
+  workflow_dispatch:
+
+jobs:
+  novnc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Desktop and noVNC Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y xfce4 xfce4-goodies tightvncserver novnc websockify curl git
+
+      - name: Start VNC Server
+        run: |
+          vncpasswd -f <<< "password123" > ~/.vnc/passwd
+          chmod 600 ~/.vnc/passwd
+          vncserver :1 -geometry 1280x800 -depth 24
+
+      - name: Start noVNC Web Server
+        run: |
+          nohup websockify --web=/usr/share/novnc/ 6080 localhost:5901 > websockify.log 2>&1 &
+          sleep 3
+
+      - name: Expose via Cloudflare Tunnel
+        run: |
+          curl -L https://github.com -o cloudflared
+          chmod +x cloudflared
+          ./cloudflared tunnel --url http://localhost:6080 --no-autoupdate &
+          sleep 10
+          grep -o 'https://[-0-9a-z]*\.trycloudflare.com' nohup.out || true
