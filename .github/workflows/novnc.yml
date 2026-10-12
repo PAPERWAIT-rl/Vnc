@@ -19,13 +19,20 @@ jobs:
 
     - name: Start VNC Server
       run: |
-        # Create the missing VNC directory first
+        # Create the VNC directory
         mkdir -p ~/.vnc
         
-        # Pass the password twice (password + confirmation) into vncpasswd
-        echo "password123" | vncpasswd -f 2>/dev/null || (echo "password123"; echo "password123") | vncpasswd
+        # Configure XFCE startup script for VNC
+        echo "#!/bin/bash" > ~/.vnc/xstartup
+        echo "xrdb $HOME/.Xresources" >> ~/.vnc/xstartup
+        echo "startxfce4 &" >> ~/.vnc/xstartup
+        chmod +x ~/.vnc/xstartup
         
+        # Set VNC password
+        echo "password123" | vncpasswd -f 2>/dev/null || (echo "password123"; echo "password123") | vncpasswd
         chmod 600 ~/.vnc/passwd
+        
+        # Start VNC Server on display :1
         vncserver :1 -geometry 1280x800 -depth 24
 
     - name: Start noVNC Web Server
@@ -36,7 +43,7 @@ jobs:
     - name: Expose via Cloudflare Tunnel
       run: |
         # Download the correct cloudflared binary for Linux x86_64
-        curl -L https://github.com -o cloudflared
+        curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
         chmod +x cloudflared
         
         # Start tunnel and pipe output to nohup.out so grep can read it
